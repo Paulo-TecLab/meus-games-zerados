@@ -2,34 +2,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const gameForm = document.getElementById('beaten-game-form');
     const gamesList = document.getElementById('games-list');
 
-    // Carregar jogos do LocalStorage
-    let games = JSON.parse(localStorage.getItem('myBeatenGames')) || [];
+    // Referência para a coleção "jogos" no banco de dados
+    const jogosRef = window.dbRef(window.db, 'jogos');
 
-    function displayGames() {
+    // Função para formatar data
+    function formatDate(dateStr) {
+        if(!dateStr) return "";
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+    }
+
+    // LER DADOS DA NUVEM EM TEMPO REAL
+    window.dbOnValue(jogosRef, (snapshot) => {
+        const data = snapshot.val();
         gamesList.innerHTML = '';
         
-        games.forEach((game, index) => {
-            const card = document.createElement('div');
-            card.className = 'game-card';
-            
-            card.innerHTML = `
-                <span class="tier-badge">${game.tier}</span>
-                <h3>${game.title}</h3>
-                <p><strong>Gênero:</strong> ${game.genre}</p>
-                <p><strong>Nota:</strong> ${game.rating}/10</p>
-                <p><strong>Tempo:</strong> ${game.hours} horas</p>
-                <p><strong>Período:</strong> ${formatDate(game.start)} até ${formatDate(game.end)}</p>
-                <button class="delete-btn" onclick="deleteGame(${index})">Banir do Registro</button>
-            `;
-            gamesList.appendChild(card);
-        });
-    }
+        if (data) {
+            Object.keys(data).forEach((id) => {
+                const game = data[id];
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                
+                card.innerHTML = `
+                    <span class="tier-badge">${game.tier}</span>
+                    <h3>${game.title}</h3>
+                    <p><strong>Gênero:</strong> ${game.genre}</p>
+                    <p><strong>Nota:</strong> ${game.rating}/10</p>
+                    <p><strong>Tempo:</strong> ${game.hours} horas</p>
+                    <p><strong>Período:</strong> ${formatDate(game.start)} até ${formatDate(game.end)}</p>
+                    <button class="delete-btn" onclick="deleteGame('${id}')">Banir do Registro</button>
+                `;
+                gamesList.appendChild(card);
+            });
+        }
+    });
 
-    function formatDate(dateStr) {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('pt-BR');
-    }
-
+    // SALVAR NO FIREBASE
     gameForm.addEventListener('submit', (e) => {
         e.preventDefault();
 
@@ -43,20 +51,15 @@ document.addEventListener('DOMContentLoaded', () => {
             end: document.getElementById('end-date').value
         };
 
-        games.push(newGame);
-        localStorage.setItem('myBeatenGames', JSON.stringify(games));
-        
+        window.dbPush(jogosRef, newGame);
         gameForm.reset();
-        displayGames();
     });
 
-    window.deleteGame = (index) => {
-        if(confirm("Deseja apagar este registro para sempre?")) {
-            games.splice(index, 1);
-            localStorage.setItem('myBeatenGames', JSON.stringify(games));
-            displayGames();
+    // DELETAR DO FIREBASE
+    window.deleteGame = (id) => {
+        if(confirm("Deseja apagar este registro da nuvem para sempre?")) {
+            const gameRef = window.dbRef(window.db, 'jogos/' + id);
+            window.dbRemove(gameRef);
         }
     };
-
-    displayGames();
 });
